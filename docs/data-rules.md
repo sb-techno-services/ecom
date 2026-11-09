@@ -1,0 +1,9 @@
+# Data and transaction rules
+
+- Product SKUs are compared case-insensitively by SQLite. An archived row keeps its current SKU and appears in the product list. The app has no unarchive action. Editing product details and manually adjusting its stock remain available.
+- Product detail updates exclude stock. Manual adjustment writes the new balance and a timestamped adjustment record in the same transaction. The stock screen shows the 20 most recent manual changes for that product.
+- The order uses one row per distinct product. Each row contains a product reference plus the saved name, SKU and unit price. Line totals are calculated from saved quantity and unit price. The order total is stored in pence and the order number is derived from its database ID.
+- Write operations acquire SQLite's writer lock with `BEGIN IMMEDIATE` before reading state. Order creation checks active status and deducts with a conditional update that requires sufficient stock. A later failure rolls back every deduction and any order records. Cancellation claims the order with a conditional update on its cancellation timestamp and restores all quantities in the same transaction.
+- Connections enforce foreign keys and wait up to two seconds for SQLite lock contention. If the lock persists, the app returns HTTP 503 with a retry message. SQLite permits one writer at a time.
+- Prices can be £0 through £999,999.99. Opening stock, a single manual adjustment and the combined quantity per product in an order are capped at 1,000,000,000 units. Orders accept up to 50 submitted lines. The limits keep arithmetic inside 64-bit integers. The stock balance also leaves room to restore units from all open orders. Dates are stored and displayed in UTC.
+- Create and adjust operations use redirects after a successful POST. A distinct repeat submission can create a second order or adjustment if the stock allows it. Cancellation is safe to repeat.
